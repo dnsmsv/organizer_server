@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,125 +13,104 @@ namespace Organizer.Controllers
     [Route("[controller]")]
     [ApiController]
     [Produces("application/json")]
-    [EnableCors("AllowSpecificOrigin")]
     public class OrganizerController : ControllerBase
     {
-        private readonly OrganizerContext _context;
+        private readonly ITaskRepository taskRepository;
 
-        public OrganizerController(OrganizerContext context)
+        public OrganizerController(ITaskRepository taskRepository)
         {
-            _context = context;
+            this.taskRepository = taskRepository;
         }
 
-        // GET: Organizer
-        [HttpGet]
-        public async Task<ActionResult<string>> GetDates()
+        [HttpGet("{dateTimeAsString}.{format?}")]
+        public async Task<ActionResult<Dictionary<int, Response>>> GetTask(string dateTimeAsString)
         {
-            var dates = await _context.Dates.ToListAsync();
-            string json = string.Empty;
-            dates.ForEach(d => json += JsonConvert.SerializeObject(d));
-            return json;
-        }
-
-        // GET: Organizer/12-09-2020
-        [EnableCors("AllowSpecificOrigin")]
-        [HttpGet("{dateTimeAsString}.json")]
-        public async Task<ActionResult<string>> GetDate(string dateTimeAsString)
-        {
-            var dateTime = DateTime.Parse(dateTimeAsString);
-            var date = await _context.Dates.FirstOrDefaultAsync(d => d.TimeStamp == dateTime);
-
-            if (date != null)
+            try
             {
-                var res = new Dictionary<int, Response>();
+                var dateTime = DateTime.Parse(dateTimeAsString);
+                Date date = await taskRepository.GetDate(dateTime);
 
-                foreach (var task in date.Tasks)
-                    res.Add(task.Id, new Response(date.TimeStamp.ToString("dd-MM-yyyy"), task.Title));
+                if (date != null)
+                {
+                    var res = new Dictionary<int, Response>();
 
-                return JsonConvert.SerializeObject(res);
+                    foreach (var task in date.Tasks)
+                        res.Add(task.Id, new Response(date.TimeStamp.ToString("dd-MM-yyyy"), task.Title));
+
+                    return Ok(JsonConvert.SerializeObject(res));
+                }
+            }
+            catch (Exception)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    "Error getting data from the database");
             }
 
             return null;
         }
 
-        // PUT: api/Organizer/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for
-        // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
-        //[HttpPut("{dateTimeAsString}.json")]
-        //[EnableCors("AllowSpecificOrigin")]
-        //[HttpPut]
-        //public async Task<IActionResult> PutDate(string dateTimeAsString, Response response)
-        //{
-        //    var dateTime = DateTime.Parse(dateTimeAsString);
-        //    var date = await _context.Dates.FirstOrDefaultAsync(d => d.TimeStamp == dateTime);
-
-        //    //if (date == null)
-        //    //{
-        //    //    var addingDate = new Date
-        //    //    {
-        //    //        TimeStamp = dateTime,
-        //    //        Tasks = new List<Models.Task>()
-        //    //    };
-        //    //    addingDate.Tasks.Add(new Models.Task { Date = addingDate, Title = response.title });
-        //    //    _context.Dates.Add(addingDate);
-        //    //}
-
-        //    //await _context.SaveChangesAsync();
-        //    return new EmptyResult(); //NoContent();
-        //}
-
-        // POST: api/Organizer
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for
-        // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
-        [EnableCors("AllowSpecificOrigin")]
-        [HttpPost("{dateTimeAsString}.json")]
-        public async Task<ActionResult<Response>> PostDate(string dateTimeAsString, Response response)
+        [HttpPost("{dateTimeAsString}.{format?}")]
+        public async Task<ActionResult<Response>> PostTask(string dateTimeAsString, Response response)
         {
-            var dateTime = DateTime.Parse(dateTimeAsString);
-            var date = await _context.Dates.FirstOrDefaultAsync(d => d.TimeStamp == dateTime);
-
-            if (date == null)
+            try
             {
-                var addingDate = new Date
+                if (response == null)
+                    return BadRequest();
+
+                var dateTime = DateTime.Parse(dateTimeAsString);
+                var date = await taskRepository.GetDate(dateTime);
+                Models.Task task;
+
+                if (date == null)
                 {
-                    TimeStamp = dateTime,
-                    Tasks = new List<Models.Task>()
-                };
-                _context.Tasks.Add(new Models.Task { Date = addingDate, Title = response.title });
-                _context.Dates.Add(addingDate);
+                    var addingDate = new Date
+                    {
+                        TimeStamp = dateTime,
+                        Tasks = new List<Models.Task>()
+                    };
+                    task = new Models.Task { Date = addingDate, Title = response.title };
+                    await taskRepository.AddDate(addingDate);
+                    await taskRepository.AddTask(task);
+                }
+                else
+                {
+                    task = new Models.Task { Date = date, Title = response.title };
+                    await taskRepository.AddTask(task);
+                }
+
+                await taskRepository.Save();
+                return CreatedAtRoute(new { id = dateTimeAsString }, new { name = task.Id, response });
             }
-            else
+            catch (Exception)
             {
-                _context.Tasks.Add(new Models.Task { Date = date, Title = response.title });
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    "Task adding to database error");
             }
-
-            await _context.SaveChangesAsync();
-            return response;
         }
 
-        // DELETE: api/Organizer/5
-        [HttpDelete("{id}.json")]
-        public async Task<ActionResult<Date>> DeleteDate(int id)
+        [HttpDelete("{dateTimeAsString}/{id}.json")]
+        public async Task<ActionResult<Models.Task>> DeleteTask(int id)
         {
-            var task = await _context.Tasks.FindAsync(id);
+            try
+            {
+                var task = await taskRepository.GetTask(id);
 
-            if (task == null)
-                return NotFound();
+                if (task == null)
+                    return NotFound();
 
-            Date date = task.Date;
-            _context.Tasks.Remove(task);
+                taskRepository.DeleteTask(task);
 
-            if (!date.Tasks.Any())
-                _context.Dates.Remove(date);
+                if (task.Date.Tasks.Count == 1)
+                    taskRepository.DeleteDate(task.Date);
 
-            await _context.SaveChangesAsync();
-
-            return date;
-        }
-
-        private bool DateExists(DateTime id)
-        {
-            return _context.Dates.Any(e => e.TimeStamp == id);
+                await taskRepository.Save();
+                return task;
+            }
+            catch (Exception)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    "Task deleting error");
+            }
         }
     }
 }

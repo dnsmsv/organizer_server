@@ -1,6 +1,4 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
-using Newtonsoft.Json;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace Organizer.Models
 {
@@ -8,9 +6,7 @@ namespace Organizer.Models
     {
         [Key]
         public int Id { get; set; }
-        [JsonIgnore]
         public int DateId { get; set; }
-        [JsonIgnore]
         public virtual Date Date { get; set; }
         public string Title { get; set; }
     }

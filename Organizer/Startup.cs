@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.EntityFrameworkCore;
 using Organizer.Models;
 
 namespace Organizer
@@ -26,8 +25,12 @@ namespace Organizer
                     builder => builder.AllowAnyOrigin().AllowAnyHeader().
                         WithMethods(new string[] { "GET", "POST", "PUT", "DELETE" }));
             });
-            services.AddDbContext<OrganizerContext>();
-            services.AddControllers();
+            services.AddDbContext<OrganizerContext>()
+                .AddScoped<ITaskRepository, TaskRepository>();
+            services.AddControllers(options => 
+                options.RespectBrowserAcceptHeader = true)
+            .AddNewtonsoftJson(options => 
+                options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore);
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
