@@ -1,2 +1,21 @@
-# organizer_server
-Server (asp net core and enitityFrameworkCore)
+# Organizer server
+
+Organizer server created with ASP.NET Core and Entity Framework Core.
+
+## Introduction
+
+It's a training project. Created to practice and learn new technologies.
+
+## Technologies
+
+* .Net Core 3.1
+* Entity Framework Core 3.1.8
+
+## Features
+
+* Add/Remove/Get task to/from SQL Server database.
+* Exchange information with http client.
+
+### ToDo:
+
+* User authorization.
