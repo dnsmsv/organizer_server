@@ -4,7 +4,7 @@ Organizer server created with ASP.NET Core and Entity Framework Core.
 
 ## Introduction
 
-It's a training project. Created to practice and learn new technologies.
+It's a training project. Created to demonstration of ability and train skills.
 
 ## Technologies
 
